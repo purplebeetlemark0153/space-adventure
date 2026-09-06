@@ -26,7 +26,6 @@ import {
   MapPin,
   ListFilter,
   Globe2,
-  Download,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -432,18 +431,8 @@ export const MainGameScreen: React.FC<MainGameScreenProps> = ({
           </div>
         </div>
 
-        {/* Right: Download standalone, Audio control and Restart */}
+        {/* Right: Audio control and Restart */}
         <div className="flex items-center gap-2">
-          <a
-            id="btn-download-standalone-game"
-            href="/standalone.html"
-            download="星球大探索_完整單一網頁版.html"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold cursor-pointer transition-colors"
-            title="下載獨立 HTML 檔案"
-          >
-            <Download className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">單一HTML檔</span>
-          </a>
           <button
             id="btn-toggle-sound-main"
             onClick={onToggleAudio}
