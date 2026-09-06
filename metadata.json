@@ -1,0 +1,6 @@
+{
+  "name": "星球大探索",
+  "description": "配合立體影片《外星異世界》的可愛Q版太空探索小遊戲",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
