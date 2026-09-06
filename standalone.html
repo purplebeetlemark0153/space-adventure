@@ -1,0 +1,1683 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星球大探索 - 完整單一網頁版</title>
+  <meta name="description" content="配合立體影片《外星異世界》的可愛Q版太空探索小遊戲" />
+
+  <!-- Tailwind CSS Play CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 & ReactDOM 18 -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel Standalone for in-browser JSX parsing -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Canvas Confetti for Victory Celebration -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+  <style>
+    @keyframes gentleFloat {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-8px) rotate(2deg); }
+    }
+    @keyframes bounceJoy {
+      0%, 100% { transform: translateY(0) rotate(-5deg) scale(1); }
+      35% { transform: translateY(-22px) rotate(6deg) scale(1.06); }
+      65% { transform: translateY(-10px) rotate(-3deg) scale(0.98); }
+    }
+    @keyframes tremblePanic {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      20% { transform: translate(-5px, -3px) rotate(-4deg); }
+      40% { transform: translate(5px, 2px) rotate(4deg); }
+      60% { transform: translate(-3px, 3px) rotate(-3deg); }
+      80% { transform: translate(3px, -2px) rotate(3deg); }
+    }
+    @keyframes soulFloat {
+      0%, 100% { transform: translateY(0) translateX(0); opacity: 0.75; }
+      50% { transform: translateY(-34px) translateX(6px); opacity: 1; }
+    }
+    @keyframes twinklePulse {
+      0%, 100% { opacity: 0.2; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.35); }
+    }
+    @keyframes floatDelta {
+      0% { opacity: 0; transform: translateY(8px) scale(0.6); }
+      20% { opacity: 1; transform: translateY(-18px) scale(1.2); }
+      75% { opacity: 1; transform: translateY(-28px) scale(1); }
+      100% { opacity: 0; transform: translateY(-40px) scale(0.8); }
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.94); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .anim-float { animation: gentleFloat 3.2s ease-in-out infinite; }
+    .anim-happy { animation: bounceJoy 1.25s ease-in-out infinite; }
+    .anim-shocked { animation: tremblePanic 0.45s linear infinite; }
+    .anim-soul { animation: soulFloat 3.2s ease-in-out infinite; }
+    .anim-delta { animation: floatDelta 1.4s ease-out forwards; }
+    .anim-modal { animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans select-none antialiased min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ==========================================
+    // 1. WEB AUDIO SOUND EFFECTS
+    // ==========================================
+    class SoundManager {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+      }
+      init() {
+        if (!this.ctx && typeof window !== 'undefined') {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      playClick() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(780, now + 0.08);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      }
+      playMove() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(560, now + 0.2);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      }
+      playOxygenGain() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [440, 554, 659, 880].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const t = now + idx * 0.07;
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.18, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(t);
+          osc.stop(t + 0.15);
+        });
+      }
+      playDanger() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.setValueAtTime(200, now + 0.1);
+        osc.frequency.setValueAtTime(160, now + 0.2);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      }
+      playSuccessDNA() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const t = now + idx * 0.1;
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.2, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(t);
+          osc.stop(t + 0.25);
+        });
+      }
+      playVictory() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const notes = [
+          { f: 523.25, d: 0.15 },
+          { f: 659.25, d: 0.15 },
+          { f: 783.99, d: 0.15 },
+          { f: 1046.5, d: 0.4 },
+        ];
+        let offset = 0;
+        notes.forEach((note) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const t = now + offset;
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(note.f, t);
+          gain.gain.setValueAtTime(0.25, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + note.d);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(t);
+          osc.stop(t + note.d);
+          offset += note.d * 0.8;
+        });
+      }
+      playDefeat() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [440, 415, 392, 349].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const t = now + idx * 0.2;
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.2, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(t);
+          osc.stop(t + 0.3);
+        });
+      }
+    }
+    const sounds = new SoundManager();
+
+    // ==========================================
+    // 2. ICONS (SELF-CONTAINED SVG HELPERS)
+    // ==========================================
+    const Icon = ({ name, className = "w-5 h-5" }) => {
+      switch (name) {
+        case 'leaf':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+            </svg>
+          );
+        case 'paw':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/>
+            </svg>
+          );
+        case 'compass':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+            </svg>
+          );
+        case 'sparkles':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+              <path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/>
+            </svg>
+          );
+        case 'rocket':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+              <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+              <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+            </svg>
+          );
+        case 'volume2':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+            </svg>
+          );
+        case 'volumeX':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/>
+            </svg>
+          );
+        case 'rotateCcw':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+            </svg>
+          );
+        case 'arrowLeft':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>
+            </svg>
+          );
+        case 'trophy':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+            </svg>
+          );
+        case 'check':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          );
+        case 'checkCircle2':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
+            </svg>
+          );
+        case 'skull':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M8 20v2h8v-2"/><path d="m12.5 17-.5-1-.5 1h1z"/><path d="M16 20a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20"/>
+            </svg>
+          );
+        case 'globe2':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>
+            </svg>
+          );
+        case 'mapPin':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
+          );
+        case 'lock':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          );
+        case 'alertTriangle':
+          return (
+            <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          );
+        default:
+          return null;
+      }
+    };
+
+    // ==========================================
+    // 3. FIXED COORDINATES & PLANET LOGIC
+    // ==========================================
+    const FIXED_PLANET_LAYOUT = [
+      // Earth (Bottom-Left starting base, as designated in XXX.jpg)
+      { id: 'earth', name: '地球', isEarth: true, x: 18, y: 78, themeColor: '#38bdf8', ring: false },
+      // Row 1: Top tier across (5 planets)
+      { id: 'p1', isEarth: false, x: 9, y: 10, themeColor: '#f43f5e', ring: true },
+      { id: 'p2', isEarth: false, x: 36, y: 9, themeColor: '#fb923c', ring: false },
+      { id: 'p3', isEarth: false, x: 51, y: 9, themeColor: '#a855f7', ring: true },
+      { id: 'p4', isEarth: false, x: 70, y: 9, themeColor: '#34d399', ring: false },
+      { id: 'p5', isEarth: false, x: 86, y: 9, themeColor: '#facc15', ring: false },
+      // Row 2: Upper-middle tier (4 planets)
+      { id: 'p6', isEarth: false, x: 23, y: 16, themeColor: '#38bdf8', ring: false },
+      { id: 'p7', isEarth: false, x: 49, y: 20, themeColor: '#ec4899', ring: true },
+      { id: 'p8', isEarth: false, x: 65, y: 21, themeColor: '#a3e635', ring: false },
+      { id: 'p9', isEarth: false, x: 82, y: 20, themeColor: '#06b6d4', ring: false },
+      // Row 3: Mid-left tier (2 planets)
+      { id: 'p10', isEarth: false, x: 14, y: 25, themeColor: '#fb7185', ring: false },
+      { id: 'p11', isEarth: false, x: 29, y: 29, themeColor: '#c084fc', ring: true },
+      // Row 4: Lower-middle tier across (6 planets, sloping on right)
+      { id: 'p12', isEarth: false, x: 11, y: 37, themeColor: '#2dd4bf', ring: false },
+      { id: 'p13', isEarth: false, x: 44, y: 36, themeColor: '#f59e0b', ring: false },
+      { id: 'p14', isEarth: false, x: 56, y: 33, themeColor: '#6366f1', ring: false },
+      { id: 'p15', isEarth: false, x: 70, y: 33, themeColor: '#10b981', ring: true },
+      { id: 'p16', isEarth: false, x: 81, y: 34, themeColor: '#e879f9', ring: false },
+      { id: 'p17', isEarth: false, x: 92, y: 42, themeColor: '#f97316', ring: false },
+    ];
+
+    function generatePlanetName(existingNames) {
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      let name = '';
+      do {
+        const l1 = letters[Math.floor(Math.random() * letters.length)];
+        const l2 = letters[Math.floor(Math.random() * letters.length)];
+        const num = Math.floor(100 + Math.random() * 900);
+        name = `${l1}${l2}-${num}`;
+      } while (existingNames.has(name));
+      existingNames.add(name);
+      return name;
+    }
+
+    function shuffleArray(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function initializePlanets() {
+      const eventPool = [
+        { event: 'none' }, { event: 'none' }, { event: 'none' }, { event: 'none' },
+        { event: 'oxygen', oxygenBonus: Math.random() < 0.5 ? 2 : 3 },
+        { event: 'oxygen', oxygenBonus: Math.random() < 0.5 ? 2 : 3 },
+        { event: 'oxygen', oxygenBonus: Math.random() < 0.5 ? 2 : 3 },
+        { event: 'oxygen', oxygenBonus: Math.random() < 0.5 ? 2 : 3 },
+        { event: 'volcano' }, { event: 'volcano' },
+        { event: 'plant' },
+        { event: 'cute_animal' }, { event: 'cute_animal' },
+        { event: 'wild_animal' }, { event: 'wild_animal' },
+        { event: 'gravity_repel' }, { event: 'gravity_repel' },
+      ];
+
+      const shuffledEvents = shuffleArray(eventPool);
+      const usedNames = new Set();
+
+      return FIXED_PLANET_LAYOUT.map((layoutItem, index) => {
+        if (layoutItem.isEarth) {
+          return {
+            id: layoutItem.id,
+            name: '地球',
+            isEarth: true,
+            x: layoutItem.x,
+            y: layoutItem.y,
+            themeColor: layoutItem.themeColor,
+            ring: layoutItem.ring,
+            event: 'none',
+            visited: true,
+          };
+        }
+        const eventItem = shuffledEvents[index - 1];
+        const name = generatePlanetName(usedNames);
+        return {
+          id: layoutItem.id,
+          name,
+          isEarth: false,
+          x: layoutItem.x,
+          y: layoutItem.y,
+          themeColor: layoutItem.themeColor,
+          ring: layoutItem.ring,
+          event: eventItem.event,
+          oxygenBonus: eventItem.oxygenBonus,
+          visited: false,
+        };
+      });
+    }
+
+    function findNearestUnvisitedAlienPlanet(currentPlanetId, allPlanets, visitedIds) {
+      const current = allPlanets.find((p) => p.id === currentPlanetId);
+      if (!current) return null;
+      const candidates = allPlanets.filter((p) => !p.isEarth && p.id !== currentPlanetId && !visitedIds.includes(p.id));
+      if (candidates.length === 0) return allPlanets.find((p) => p.isEarth) || null;
+
+      let nearest = candidates[0];
+      let minDistanceSq = Number.MAX_VALUE;
+      for (const candidate of candidates) {
+        const dx = candidate.x - current.x;
+        const dy = candidate.y - current.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < minDistanceSq) {
+          minDistanceSq = distSq;
+          nearest = candidate;
+        }
+      }
+      return nearest;
+    }
+
+    // Twinkling stars in cosmic space ("宇宙空間 (有星星閃爍)")
+    const TWINKLING_STARS = [
+      { id: 1, x: 5, y: 7, size: 2, delay: 0, dur: 2.8, color: '#ffffff' },
+      { id: 2, x: 21, y: 5, size: 1.5, delay: 1.2, dur: 3.5, color: '#bae6fd' },
+      { id: 3, x: 44, y: 6, size: 2.5, delay: 0.5, dur: 2.2, color: '#fef08a' },
+      { id: 4, x: 62, y: 7, size: 1.5, delay: 1.8, dur: 4.0, color: '#ffffff' },
+      { id: 5, x: 78, y: 5, size: 2, delay: 0.8, dur: 3.1, color: '#fed7aa' },
+      { id: 6, x: 95, y: 12, size: 2, delay: 2.1, dur: 2.6, color: '#ffffff' },
+      { id: 7, x: 17, y: 18, size: 2, delay: 0.3, dur: 3.2, color: '#e0e7ff' },
+      { id: 8, x: 38, y: 22, size: 1.5, delay: 1.5, dur: 3.8, color: '#ffffff' },
+      { id: 9, x: 58, y: 18, size: 2, delay: 2.4, dur: 2.9, color: '#fbcfe8' },
+      { id: 10, x: 74, y: 24, size: 2.5, delay: 0.7, dur: 2.4, color: '#bae6fd' },
+      { id: 11, x: 90, y: 28, size: 1.5, delay: 1.9, dur: 3.4, color: '#ffffff' },
+      { id: 12, x: 6, y: 50, size: 2.5, delay: 0.4, dur: 3.0, color: '#ffffff' },
+      { id: 13, x: 16, y: 56, size: 2, delay: 1.7, dur: 2.7, color: '#fef08a' },
+      { id: 14, x: 26, y: 46, size: 1.5, delay: 2.2, dur: 3.9, color: '#ffffff' },
+      { id: 15, x: 35, y: 54, size: 3, delay: 0.9, dur: 2.5, color: '#bae6fd' },
+      { id: 16, x: 46, y: 49, size: 2, delay: 1.4, dur: 3.3, color: '#ffffff' },
+      { id: 17, x: 56, y: 56, size: 2.5, delay: 0.2, dur: 2.8, color: '#fef08a' },
+      { id: 18, x: 65, y: 46, size: 2, delay: 2.6, dur: 3.5, color: '#e0e7ff' },
+      { id: 19, x: 76, y: 54, size: 3, delay: 1.1, dur: 2.3, color: '#ffffff' },
+      { id: 20, x: 87, y: 51, size: 2, delay: 1.6, dur: 3.6, color: '#fed7aa' },
+      { id: 21, x: 96, y: 58, size: 2.5, delay: 0.6, dur: 2.9, color: '#bae6fd' },
+      { id: 22, x: 8, y: 68, size: 2, delay: 1.3, dur: 3.4, color: '#ffffff' },
+      { id: 23, x: 28, y: 70, size: 2.5, delay: 2.0, dur: 2.6, color: '#ffffff' },
+      { id: 24, x: 38, y: 66, size: 2, delay: 0.5, dur: 4.1, color: '#fbcfe8' },
+      { id: 25, x: 49, y: 76, size: 3, delay: 1.8, dur: 2.7, color: '#fef08a' },
+      { id: 26, x: 59, y: 70, size: 2, delay: 0.8, dur: 3.2, color: '#ffffff' },
+      { id: 27, x: 69, y: 78, size: 2.5, delay: 2.3, dur: 2.4, color: '#bae6fd' },
+      { id: 28, x: 81, y: 72, size: 1.5, delay: 1.0, dur: 3.7, color: '#ffffff' },
+      { id: 29, x: 93, y: 76, size: 2, delay: 1.5, dur: 3.1, color: '#fed7aa' },
+      { id: 30, x: 33, y: 86, size: 2, delay: 0.7, dur: 3.0, color: '#ffffff' },
+      { id: 31, x: 46, y: 88, size: 2.5, delay: 1.9, dur: 2.8, color: '#bae6fd' },
+      { id: 32, x: 61, y: 86, size: 2, delay: 0.3, dur: 3.6, color: '#ffffff' },
+      { id: 33, x: 73, y: 88, size: 2, delay: 2.5, dur: 3.3, color: '#fef08a' },
+    ];
+
+    // ==========================================
+    // 4. CUTE CHIBI ASTRONAUT COMPONENT
+    // ==========================================
+    const CuteAstronaut = ({ expression = 'normal', size = 'md', floating = true, className = '' }) => {
+      const sizeMap = {
+        sm: { width: 92, height: 106 },
+        md: { width: 136, height: 156 },
+        lg: { width: 200, height: 230 },
+        xl: { width: 280, height: 322 },
+        '2xl': { width: 350, height: 402 },
+      };
+      const { width, height } = sizeMap[size] || sizeMap.md;
+
+      let animClass = '';
+      if (expression === 'happy') animClass = 'anim-happy';
+      else if (expression === 'shocked') animClass = 'anim-shocked';
+      else if (floating) animClass = 'anim-float';
+
+      return (
+        <div
+          style={{ width, height }}
+          className={`relative inline-block select-none pointer-events-none drop-shadow-xl ${animClass} ${className}`}
+        >
+          <svg viewBox="0 0 140 160" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full overflow-visible">
+            <defs>
+              <linearGradient id="suitGrad" x1="10%" y1="0%" x2="90%" y2="100%">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="60%" stopColor="#f0fdf4" />
+                <stop offset="100%" stopColor="#cbd5e1" />
+              </linearGradient>
+              <linearGradient id="goldVisorGrad" x1="15%" y1="0%" x2="85%" y2="100%">
+                <stop offset="0%" stopColor="#fef08a" />
+                <stop offset="25%" stopColor="#f59e0b" />
+                <stop offset="65%" stopColor="#d97706" />
+                <stop offset="90%" stopColor="#92400e" />
+                <stop offset="100%" stopColor="#451a03" />
+              </linearGradient>
+              <linearGradient id="visorRimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#cbd5e1" />
+                <stop offset="50%" stopColor="#64748b" />
+                <stop offset="100%" stopColor="#334155" />
+              </linearGradient>
+              <linearGradient id="packGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="100%" stopColor="#94a3b8" />
+              </linearGradient>
+              <radialGradient id="helmetShine" cx="30%" cy="25%" r="65%">
+                <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+                <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+              </radialGradient>
+              <linearGradient id="soulGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#e0f2fe" stopOpacity="0.95" />
+                <stop offset="60%" stopColor="#38bdf8" stopOpacity="0.85" />
+                <stop offset="100%" stopColor="#0284c7" stopOpacity="0.1" />
+              </linearGradient>
+            </defs>
+
+            {/* DEFEAT / DIZZY: CUTE SOUL & ANGEL SKULL */}
+            {expression === 'dizzy' && (
+              <g className="anim-soul">
+                <circle cx="70" cy="22" r="22" fill="#38bdf8" fillOpacity="0.25" />
+                <path d="M52 28 C50 14 60 4 70 4 C80 4 90 14 88 28 C87 36 82 38 78 35 C75 32 72 38 70 38 C68 38 65 32 62 35 C58 38 53 36 52 28 Z" fill="url(#soulGrad)" stroke="#bae6fd" strokeWidth="1.5" />
+                <path d="M52 20 C46 19 44 24 49 26" fill="none" stroke="#bae6fd" strokeWidth="2" strokeLinecap="round" />
+                <path d="M88 20 C94 19 96 24 91 26" fill="none" stroke="#bae6fd" strokeWidth="2" strokeLinecap="round" />
+                <circle cx="63" cy="16" r="2.2" fill="#0369a1" />
+                <circle cx="77" cy="16" r="2.2" fill="#0369a1" />
+                <circle cx="63.7" cy="15.3" r="0.8" fill="#ffffff" />
+                <circle cx="77.7" cy="15.3" r="0.8" fill="#ffffff" />
+                <circle cx="58" cy="20" r="3.2" fill="#f472b6" fillOpacity="0.8" />
+                <circle cx="82" cy="20" r="3.2" fill="#f472b6" fillOpacity="0.8" />
+                <path d="M67 20 Q70 23 73 20" fill="none" stroke="#0369a1" strokeWidth="1.5" strokeLinecap="round" />
+
+                {/* Chibi Skull */}
+                <g transform="translate(86, 0)">
+                  <ellipse cx="14" cy="2" rx="10" ry="3.5" fill="none" stroke="#facc15" strokeWidth="1.8" />
+                  <path d="M4 14 C4 8 8 4 14 4 C20 4 24 8 24 14 C24 18 22 20 20 21 L20 25 C20 26 18 27 14 27 C10 27 8 26 8 25 L8 21 C6 20 4 18 4 14 Z" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.5" />
+                  <circle cx="10" cy="13" r="3.2" fill="#1e293b" />
+                  <circle cx="18" cy="13" r="3.2" fill="#1e293b" />
+                  <circle cx="10.8" cy="12" r="1.3" fill="#ffffff" />
+                  <circle cx="18.8" cy="12" r="1.3" fill="#ffffff" />
+                  <ellipse cx="7" cy="16" rx="2" ry="1.2" fill="#fb7185" fillOpacity="0.85" />
+                  <ellipse cx="21" cy="16" rx="2" ry="1.2" fill="#fb7185" fillOpacity="0.85" />
+                  <path d="M13.5 17 L14 16 L14.5 17 Z" fill="#64748b" />
+                  <path d="M11 23 L11 25 M14 23 L14 25 M17 23 L17 25" stroke="#94a3b8" strokeWidth="1.2" strokeLinecap="round" />
+                </g>
+                <circle cx="50" cy="38" r="2.5" fill="#38bdf8" fillOpacity="0.8" />
+                <circle cx="94" cy="35" r="3" fill="#facc15" fillOpacity="0.8" />
+              </g>
+            )}
+
+            {/* BACKPACK & CYLINDERS */}
+            <rect x="38" y="72" width="64" height="50" rx="16" fill="url(#packGrad)" stroke="#94a3b8" strokeWidth="2" />
+            <rect x="43" y="76" width="16" height="34" rx="8" fill="#38bdf8" />
+            <rect x="46" y="80" width="7" height="22" rx="3.5" fill="#ffffff" fillOpacity="0.5" />
+            <rect x="81" y="76" width="16" height="34" rx="8" fill="#38bdf8" />
+            <rect x="84" y="80" width="7" height="22" rx="3.5" fill="#ffffff" fillOpacity="0.5" />
+            <line x1="70" y1="42" x2="70" y2="28" stroke="#64748b" strokeWidth="4" strokeLinecap="round" />
+            <circle cx="70" cy="26" r="6.5" fill="#38bdf8" stroke="#0284c7" strokeWidth="1.5" />
+            <circle cx="68" cy="24" r="2.5" fill="#ffffff" />
+
+            {/* LEGS & BOOTS */}
+            {expression === 'happy' ? (
+              <g id="legs-happy">
+                <rect x="46" y="122" width="20" height="24" rx="10" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2" transform="rotate(-6 56 122)" />
+                <ellipse cx="50" cy="148" rx="13" ry="7" fill="#0284c7" />
+                <rect x="74" y="118" width="20" height="25" rx="10" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2" transform="rotate(28 84 118)" />
+                <ellipse cx="102" cy="138" rx="13" ry="7" fill="#0284c7" transform="rotate(28 102 138)" />
+              </g>
+            ) : expression === 'shocked' ? (
+              <g id="legs-shocked">
+                <rect x="42" y="124" width="20" height="24" rx="10" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2" transform="rotate(12 52 124)" />
+                <ellipse cx="56" cy="148" rx="13" ry="7" fill="#f43f5e" />
+                <rect x="78" y="124" width="20" height="24" rx="10" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2" transform="rotate(-12 88 124)" />
+                <ellipse cx="84" cy="148" rx="13" ry="7" fill="#f43f5e" />
+              </g>
+            ) : (
+              <g id="legs-normal">
+                <rect x="46" y="124" width="20" height="24" rx="10" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2" />
+                <ellipse cx="56" cy="148" rx="13" ry="7" fill="#475569" />
+                <rect x="74" y="124" width="20" height="24" rx="10" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2" />
+                <ellipse cx="84" cy="148" rx="13" ry="7" fill="#475569" />
+              </g>
+            )}
+
+            {/* SUIT BODY */}
+            <rect x="42" y="90" width="56" height="42" rx="21" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2" />
+            <rect x="54" y="99" width="32" height="18" rx="8" fill="#0f172a" stroke="#38bdf8" strokeWidth="1.5" />
+            <path d="M70 102 L71.5 106 L76 106.5 L72.5 109.5 L73.5 114 L70 111.5 L66.5 114 L67.5 109.5 L64 106.5 L68.5 106 Z" fill="#facc15" />
+            <circle cx="59" cy="108" r="2.2" fill="#38bdf8" />
+            <circle cx="81" cy="108" r="2.2" fill="#4ade80" />
+
+            {/* ARMS & GESTURES */}
+            {expression === 'happy' ? (
+              <g id="arms-happy">
+                <path d="M44 100 C30 90 14 62 24 50 C32 40 44 68 50 92" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2.5" />
+                <circle cx="22" cy="46" r="10.5" fill="#38bdf8" stroke="#0284c7" strokeWidth="2" />
+                <path d="M96 100 C110 90 126 62 116 50 C108 40 96 68 90 92" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2.5" />
+                <circle cx="118" cy="46" r="10.5" fill="#38bdf8" stroke="#0284c7" strokeWidth="2" />
+                <path d="M8 32 L10.5 24 L18 22 L10.5 19 L8 12 L5.5 19 L-2 22 L5.5 24 Z" fill="#facc15" transform="translate(10, 4) scale(0.9)" />
+                <path d="M8 32 L10.5 24 L18 22 L10.5 19 L8 12 L5.5 19 L-2 22 L5.5 24 Z" fill="#38bdf8" transform="translate(112, 4) scale(0.9)" />
+                <path d="M32 20 L32 10 L40 8 L40 14 M32 14 A 3 3 0 1 1 28 17 A 3 3 0 0 1 32 14" fill="#facc15" stroke="#f59e0b" strokeWidth="1.2" />
+              </g>
+            ) : expression === 'shocked' ? (
+              <g id="arms-shocked">
+                <path d="M44 102 C28 98 22 72 32 58 C38 52 46 62 48 76" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2.5" />
+                <circle cx="34" cy="58" r="11" fill="#f43f5e" stroke="#be123c" strokeWidth="2" />
+                <path d="M96 102 C112 98 118 72 108 58 C102 52 94 62 92 76" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2.5" />
+                <circle cx="106" cy="58" r="11" fill="#f43f5e" stroke="#be123c" strokeWidth="2" />
+                <path d="M18 42 C12 36 10 48 18 52 C24 54 28 48 22 42 Z" fill="#38bdf8" stroke="#0284c7" strokeWidth="1.5" />
+                <path d="M122 42 C128 36 130 48 122 52 C116 54 112 48 118 42 Z" fill="#38bdf8" stroke="#0284c7" strokeWidth="1.5" />
+                <path d="M12 72 L6 80 L14 82 L8 92" fill="none" stroke="#facc15" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M128 72 L134 80 L126 82 L132 92" fill="none" stroke="#facc15" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                <g transform="translate(63, 2)">
+                  <rect x="0" y="0" width="4.5" height="13" rx="2.2" fill="#facc15" stroke="#d97706" strokeWidth="1" />
+                  <circle cx="2.25" cy="17.5" r="2.4" fill="#facc15" stroke="#d97706" strokeWidth="1" />
+                </g>
+              </g>
+            ) : expression === 'dizzy' ? (
+              <g id="arms-dizzy">
+                <path d="M44 98 C30 110 26 132 36 134 C44 136 48 118 50 106" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2" />
+                <circle cx="36" cy="134" r="9" fill="#94a3b8" />
+                <path d="M96 98 C110 110 114 132 104 134 C96 136 92 118 90 106" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2" />
+                <circle cx="104" cy="134" r="9" fill="#94a3b8" />
+              </g>
+            ) : (
+              <g id="arms-normal">
+                <path d="M42 98 C28 106 26 120 36 122 C44 124 48 112 50 104" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2" />
+                <circle cx="35" cy="122" r="9.5" fill="#0284c7" />
+                <path d="M98 98 C112 106 114 120 104 122 C96 124 92 112 90 104" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2" />
+                <circle cx="105" cy="122" r="9.5" fill="#0284c7" />
+              </g>
+            )}
+
+            {/* HELMET & GOLD VISOR */}
+            <circle cx="70" cy="58" r="36" fill="url(#suitGrad)" stroke="#cbd5e1" strokeWidth="2.5" />
+            <ellipse cx="60" cy="36" rx="20" ry="10" fill="url(#helmetShine)" />
+            <rect x="48" y="88" width="44" height="9" rx="4.5" fill="#94a3b8" stroke="#64748b" strokeWidth="1.5" />
+            <rect x="40" y="37" width="60" height="42" rx="21" fill="url(#visorRimGrad)" stroke="#334155" strokeWidth="2" />
+            <rect x="43" y="40" width="54" height="36" rx="18" fill="url(#goldVisorGrad)" />
+            <path d="M 52 46 Q 70 41 88 47 Q 85 53 70 48 Q 55 49 52 46 Z" fill="#ffffff" fillOpacity="0.9" />
+            <path d="M 53 64 Q 70 59 87 65 Q 84 70 70 65 Q 56 66 53 64 Z" fill="#fef08a" fillOpacity="0.45" />
+            <path d="M 85 50 L 86.5 45 L 88 50 L 93 51.5 L 88 53 L 86.5 58 L 85 53 L 80 51.5 Z" fill="#ffffff" fillOpacity="0.95" />
+          </svg>
+        </div>
+      );
+    };
+
+    // ==========================================
+    // 5. OXYGEN GAUGE COMPONENT
+    // ==========================================
+    const OxygenGauge = ({ oxygen, deltaAnimation }) => {
+      const isLow = oxygen <= 2;
+      return (
+        <div
+          id="oxygen-gauge-container"
+          className={`relative flex items-center gap-3 px-3.5 py-2.5 rounded-2xl backdrop-blur-md border transition-all duration-300 shadow-lg ${
+            isLow ? 'bg-rose-950/80 border-rose-500/80 ring-2 ring-rose-500/50' : 'bg-slate-900/85 border-cyan-500/40 ring-1 ring-cyan-500/30'
+          }`}
+        >
+          {deltaAnimation && (
+            <div
+              key={deltaAnimation.id}
+              className={`anim-delta absolute -top-4 right-4 px-2 py-0.5 rounded-full font-black text-xs sm:text-sm border shadow-xl z-30 ${
+                deltaAnimation.value > 0 ? 'bg-emerald-500 text-white border-emerald-300' : 'bg-rose-600 text-white border-rose-300'
+              }`}
+            >
+              {deltaAnimation.value > 0 ? `+${deltaAnimation.value}` : deltaAnimation.value} 氧氣罐
+            </div>
+          )}
+
+          <div className="relative w-8 h-10 flex-shrink-0">
+            <svg viewBox="0 0 36 48" className="w-full h-full drop-shadow">
+              <rect x="14" y="2" width="8" height="4" rx="2" fill="#cbd5e1" />
+              <rect x="16" y="6" width="4" height="4" fill="#64748b" />
+              <rect x="6" y="10" width="24" height="34" rx="7" fill={isLow ? '#f43f5e' : '#0284c7'} />
+              <rect x="10" y="16" width="16" height="14" rx="3" fill="#0f172a" fillOpacity="0.85" />
+              <rect
+                x="12"
+                y={28 - Math.min(oxygen, 10) * 1.0}
+                width="12"
+                height={Math.min(oxygen, 10) * 1.0}
+                rx="2"
+                fill={isLow ? '#f43f5e' : '#22c55e'}
+              />
+            </svg>
+            {isLow && (
+              <span className="absolute -top-2 -left-2 text-rose-400">
+                <Icon name="alertTriangle" className="w-4 h-4 animate-bounce" />
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-300">氧氣存量</span>
+              <span className={`text-lg sm:text-xl font-black font-mono tracking-wider ${isLow ? 'text-rose-400' : 'text-cyan-300'}`}>
+                × {oxygen}
+              </span>
+              {isLow && (
+                <span className="text-[10px] font-bold text-rose-400 px-1.5 py-0.2 rounded bg-rose-950/90 border border-rose-600/60 animate-pulse">
+                  警告
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1 mt-1">
+              {Array.from({ length: Math.min(Math.max(oxygen, 0), 10) }).map((_, idx) => (
+                <div key={idx} className={`w-1.5 h-3.5 rounded-sm ${isLow ? 'bg-rose-500' : 'bg-cyan-400'}`} />
+              ))}
+              {oxygen > 10 && <span className="text-[10px] font-bold text-cyan-300">+{oxygen - 10}</span>}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // ==========================================
+    // 6. PLANET GRAPHIC COMPONENT
+    // ==========================================
+    const PlanetGraphic = ({ planet, isCurrent, canClick, onClick }) => {
+      const isVisited = planet.visited;
+      const isEarth = planet.isEarth;
+
+      return (
+        <div
+          id={`planet-container-${planet.id}`}
+          style={{ left: `${planet.x}%`, top: `${planet.y}%` }}
+          className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 select-none"
+        >
+          <button
+            id={`btn-planet-${planet.id}`}
+            onClick={() => { if (canClick) onClick(); }}
+            disabled={!canClick}
+            className={`relative group rounded-full transition-all duration-300 flex items-center justify-center p-2.5 focus:outline-none ${
+              canClick
+                ? 'cursor-pointer hover:scale-115 active:scale-95'
+                : isCurrent
+                ? 'cursor-default'
+                : 'cursor-not-allowed opacity-50 filter grayscale'
+            }`}
+            style={{ minWidth: isEarth ? '68px' : '52px', minHeight: isEarth ? '68px' : '52px' }}
+          >
+            {canClick && (
+              <span
+                className="absolute inset-0 rounded-full animate-ping opacity-30 pointer-events-none"
+                style={{ backgroundColor: isEarth ? '#38bdf8' : planet.themeColor }}
+              />
+            )}
+
+            {isCurrent && (
+              <span className="absolute -top-3.5 px-2 py-0.5 rounded-full bg-yellow-400 text-slate-900 text-xs font-black tracking-wide shadow-md border border-white animate-bounce z-20">
+                目前在此
+              </span>
+            )}
+
+            <div
+              className={`relative rounded-full shadow-lg overflow-visible transition-transform ${
+                canClick ? 'group-hover:drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]' : ''
+              }`}
+              style={{ width: isEarth ? '60px' : '44px', height: isEarth ? '60px' : '44px' }}
+            >
+              {isEarth ? (
+                <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-md">
+                  <circle cx="50" cy="50" r="48" fill="#38bdf8" fillOpacity="0.25" />
+                  <circle cx="50" cy="50" r="44" fill="#0284c7" />
+                  <path d="M32 28 C38 22 52 24 56 30 C58 35 48 42 42 42 C36 42 28 34 32 28 Z" fill="#22c55e" opacity="0.9" />
+                  <path d="M58 45 C66 40 76 44 78 52 C79 58 72 65 64 64 C56 63 52 50 58 45 Z" fill="#22c55e" opacity="0.9" />
+                  <path d="M26 56 C34 52 40 60 42 68 C44 74 36 78 30 76 C24 74 22 62 26 56 Z" fill="#22c55e" opacity="0.9" />
+                  <path d="M30 40 Q45 35 60 42 Q75 48 85 45" stroke="#ffffff" strokeWidth="4" strokeLinecap="round" opacity="0.65" fill="none" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-md overflow-visible">
+                  {planet.ring && (
+                    <ellipse cx="50" cy="50" rx="62" ry="18" fill="none" stroke={planet.themeColor} strokeWidth="6" opacity="0.5" transform="rotate(-20 50 50)" />
+                  )}
+                  <circle cx="50" cy="50" r="44" fill={planet.themeColor} />
+                  <circle cx="34" cy="38" r="7" fill="#000000" opacity="0.18" />
+                  <circle cx="64" cy="58" r="9" fill="#000000" opacity="0.18" />
+                  {planet.ring && (
+                    <path d="M -6 50 A 62 18 0 0 0 106 50" fill="none" stroke="#ffffff" strokeWidth="4" opacity="0.7" transform="rotate(-20 50 50)" />
+                  )}
+                </svg>
+              )}
+
+              {!isEarth && isVisited && (
+                <div className="absolute inset-0 rounded-full bg-slate-900/60 flex items-center justify-center">
+                  <Icon name="lock" className="w-4 h-4 text-slate-300" />
+                </div>
+              )}
+            </div>
+          </button>
+
+          <div
+            className={`mt-0.5 px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-bold tracking-wider shadow border transition-all whitespace-nowrap ${
+              isEarth
+                ? 'bg-blue-600/90 text-white border-blue-400'
+                : isVisited
+                ? 'bg-slate-800/80 text-slate-400 border-slate-700'
+                : canClick
+                ? 'bg-slate-900/90 text-yellow-300 border-amber-400/80 ring-2 ring-yellow-400/40 font-extrabold'
+                : 'bg-slate-900/80 text-slate-200 border-slate-700'
+            }`}
+          >
+            {planet.name}
+            {!isEarth && isVisited && (
+              <span className="ml-1 text-[10px] text-emerald-400 font-semibold">(已探索)</span>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    // ==========================================
+    // 7. START SCREEN COMPONENT
+    // ==========================================
+    const StartScreen = ({ onStart, audioEnabled, onToggleAudio }) => {
+      return (
+        <div id="start-screen" className="relative min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-8 overflow-hidden bg-radial from-indigo-950 via-slate-950 to-black text-white">
+          <div className="absolute inset-0 pointer-events-none opacity-40">
+            <div className="absolute top-1/4 left-1/5 w-72 h-72 rounded-full bg-cyan-600/20 blur-3xl animate-pulse" />
+            <div className="absolute bottom-1/3 right-1/4 w-80 h-80 rounded-full bg-purple-600/20 blur-3xl animate-pulse" />
+          </div>
+
+          <header className="w-full max-w-4xl flex justify-end items-center z-20">
+            <button
+              onClick={onToggleAudio}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-xs sm:text-sm text-slate-300 transition-all cursor-pointer shadow-md"
+            >
+              <Icon name={audioEnabled ? 'volume2' : 'volumeX'} className="w-4 h-4 text-cyan-400" />
+              <span>{audioEnabled ? '音效開啟' : '靜音中'}</span>
+            </button>
+          </header>
+
+          <main className="w-full max-w-2xl flex flex-col items-center text-center my-auto z-10 py-6">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs sm:text-sm font-semibold tracking-wide mb-4">
+              <Icon name="sparkles" className="w-4 h-4 text-yellow-300 animate-spin" />
+              <span>太空探險科普小遊戲</span>
+            </div>
+
+            <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-cyan-100 to-cyan-400 drop-shadow-[0_4px_24px_rgba(34,211,238,0.4)] mb-3">
+              星球大探索
+            </h1>
+
+            <p className="text-lg sm:text-2xl font-black text-amber-300 drop-shadow-sm max-w-2xl mb-4 px-2 leading-relaxed">
+              配合立體影片《外星異世界》，請各位一起來探索這個外星異世界吧
+            </p>
+
+            <div className="my-6 relative flex items-center justify-center">
+              <div className="absolute -inset-6 bg-cyan-400/20 rounded-full blur-2xl animate-pulse" />
+              <CuteAstronaut expression="normal" size="xl" floating={true} />
+            </div>
+
+            <div className="bg-slate-900/90 border-2 border-slate-700 rounded-3xl p-5 sm:p-7 max-w-xl backdrop-blur-md shadow-2xl mb-8">
+              <p className="text-base sm:text-xl font-bold text-slate-100 leading-relaxed">
+                選擇你的探索任務，前往不同星球尋找目標。
+                <br />
+                但要小心氧氣有限，完成任務後記得活著回到地球！
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                sounds.playClick();
+                onStart();
+              }}
+              className="group relative inline-flex items-center justify-center gap-3 px-10 sm:px-14 py-4 sm:py-5 rounded-2xl font-black text-xl sm:text-2xl text-slate-950 bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-400 shadow-[0_6px_25px_rgba(251,191,36,0.5)] hover:scale-105 active:scale-95 transition-all cursor-pointer border-2 border-amber-200"
+            >
+              <Icon name="rocket" className="w-7 h-7 sm:w-8 sm:h-8 text-slate-900" />
+              <span>進入遊戲</span>
+            </button>
+          </main>
+
+          <footer className="w-full text-center text-xs text-slate-500 z-10">
+            電腦滑鼠點擊 • 手機/平板觸控 • 支援響應式螢幕 • 單一HTML獨立運行
+          </footer>
+        </div>
+      );
+    };
+
+    // ==========================================
+    // 8. MISSION SELECT SCREEN COMPONENT
+    // ==========================================
+    const MissionSelectScreen = ({ onSelectMission, audioEnabled, onToggleAudio, onBack }) => {
+      const missions = [
+        {
+          id: 'animal',
+          title: '取得外星動物生命 DNA 樣本',
+          description: '探索星球尋找「可愛外星動物」或小心應對「凶暴外星動物」，取得動物 DNA 樣本並平安帶回地球！',
+          icon: <Icon name="paw" className="w-9 h-9 sm:w-11 sm:h-11 text-amber-400" />,
+          color: 'text-amber-300',
+          border: 'border-amber-500/50 hover:border-amber-400',
+          bg: 'from-amber-950/60 to-slate-900/90 hover:from-amber-900/70',
+          tag: '任務一',
+          difficulty: '難易度：簡單',
+          difficultyColor: 'text-emerald-300 bg-emerald-950/80 border-emerald-400/50',
+        },
+        {
+          id: 'plant',
+          title: '取得外星植物生命 DNA 樣本',
+          description: '在浩瀚未知的宇宙中尋找蘊含奇異生機的「外星植物」，成功採集其 DNA 樣本並活著返回地球！',
+          icon: <Icon name="leaf" className="w-9 h-9 sm:w-11 sm:h-11 text-emerald-400" />,
+          color: 'text-emerald-300',
+          border: 'border-emerald-500/50 hover:border-emerald-400',
+          bg: 'from-emerald-950/60 to-slate-900/90 hover:from-emerald-900/70',
+          tag: '任務二',
+          difficulty: '難易度：中等',
+          difficultyColor: 'text-amber-300 bg-amber-950/80 border-amber-400/50',
+        },
+        {
+          id: 'explore10',
+          title: '探索十個星球',
+          description: '發揮冒險精神！在有限的氧氣補給下，成功登陸並調查至少 10 顆不同的外星星球，最後安全返航地球！',
+          icon: <Icon name="compass" className="w-9 h-9 sm:w-11 sm:h-11 text-cyan-400" />,
+          color: 'text-cyan-300',
+          border: 'border-cyan-500/50 hover:border-cyan-400',
+          bg: 'from-cyan-950/60 to-slate-900/90 hover:from-cyan-900/70',
+          tag: '任務三',
+          difficulty: '難易度：困難',
+          difficultyColor: 'text-rose-300 bg-rose-950/80 border-rose-400/50',
+        },
+      ];
+
+      return (
+        <div id="mission-select-screen" className="relative min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-8 bg-gradient-to-b from-slate-950 via-indigo-950 to-slate-950 text-white overflow-y-auto">
+          <header className="w-full max-w-5xl flex justify-between items-center z-20 mb-4">
+            <button
+              onClick={() => { sounds.playClick(); onBack(); }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-xs sm:text-sm text-slate-300 transition-colors cursor-pointer"
+            >
+              <Icon name="arrowLeft" className="w-4 h-4" />
+              <span>返回首頁</span>
+            </button>
+            <button
+              onClick={onToggleAudio}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-xs sm:text-sm text-slate-300 transition-colors cursor-pointer"
+            >
+              <Icon name={audioEnabled ? 'volume2' : 'volumeX'} className="w-4 h-4 text-cyan-400" />
+              <span className="hidden sm:inline">{audioEnabled ? '音效開啟' : '靜音'}</span>
+            </button>
+          </header>
+
+          <main className="w-full max-w-5xl flex flex-col items-center text-center my-auto z-10 py-2">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 mb-6">
+              <CuteAstronaut expression="normal" size="md" floating={true} />
+              <div className="bg-slate-900/90 border-2 border-cyan-500/50 rounded-2xl px-6 py-4 max-w-md shadow-lg text-left">
+                <span className="text-xs font-bold text-cyan-400">太空人提示：</span>
+                <p className="text-sm sm:text-base font-bold text-slate-200 mt-0.5">
+                  隊員，出發前請選擇你的核心探索目標！請依照你的策略挑選適合的難易度。
+                </p>
+              </div>
+            </div>
+
+            <h2 className="text-2xl sm:text-4xl font-black text-white mb-2">選擇探險目標</h2>
+            <p className="text-sm sm:text-base text-slate-400 mb-6">點選下方任務即可搭乘太空船出發探索：</p>
+
+            <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6 max-w-5xl">
+              {missions.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => { sounds.playClick(); onSelectMission(m.id); }}
+                  className={`group text-left p-6 sm:p-7 rounded-3xl bg-gradient-to-b ${m.bg} border-2 ${m.border} transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] shadow-xl flex flex-col justify-between cursor-pointer focus:outline-none`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-4">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-3 py-1 rounded-full text-xs sm:text-sm font-black bg-white/15 text-white border border-white/20">
+                          {m.tag}
+                        </span>
+                        <span className={`px-2.5 py-1 rounded-full text-xs sm:text-sm font-black border ${m.difficultyColor}`}>
+                          {m.difficulty}
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-black/40 shadow-inner flex-shrink-0">
+                        {m.icon}
+                      </div>
+                    </div>
+                    <h3 className={`text-xl sm:text-2xl font-black ${m.color} mb-3`}>{m.title}</h3>
+                    <p className="text-sm sm:text-base text-slate-300 leading-relaxed">{m.description}</p>
+                  </div>
+                  <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+                    <span className="text-xs sm:text-sm text-slate-400 font-semibold">目標達成返航地球即獲勝</span>
+                    <span className="text-xs sm:text-sm font-black text-yellow-300 group-hover:translate-x-1 transition-transform">
+                      選擇出發 →
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </main>
+
+          <footer className="w-full text-center text-xs text-slate-500 py-3 z-10">
+            請做好準備，探索未知星系！
+          </footer>
+        </div>
+      );
+    };
+
+    // ==========================================
+    // 9. MAIN GAMEPLAY SCREEN COMPONENT
+    // ==========================================
+    const MainGameScreen = ({ mission, audioEnabled, onToggleAudio, onRestartGame, onVictory, onGameOver }) => {
+      const [planets, setPlanets] = useState(() => initializePlanets());
+      const [playerLocation, setPlayerLocation] = useState('earth');
+      const [oxygen, setOxygen] = useState(7);
+      const [visitedPlanets, setVisitedPlanets] = useState([]);
+      const [plantDNA, setPlantDNA] = useState(false);
+      const [animalDNA, setAnimalDNA] = useState(false);
+      const [astronautExpression, setAstronautExpression] = useState('normal');
+      const [latestEventMessage, setLatestEventMessage] = useState('太空船已就緒，請點選有光暈的外星星球開始探索！');
+      const [eventLogs, setEventLogs] = useState([]);
+      const [isProcessingMove, setIsProcessingMove] = useState(false);
+      const [oxygenDeltaAnim, setOxygenDeltaAnim] = useState(null);
+      const [mobileTab, setMobileTab] = useState('map');
+
+      const currentPlanet = planets.find((p) => p.id === playerLocation) || planets[0];
+      const exploredCount = visitedPlanets.length;
+
+      const isMissionGoalAchieved =
+        mission === 'plant' ? plantDNA : mission === 'animal' ? animalDNA : exploredCount >= 10;
+
+      const triggerDeltaAnimation = (val) => {
+        setOxygenDeltaAnim({ value: val, id: Date.now() });
+        setTimeout(() => setOxygenDeltaAnim(null), 1400);
+      };
+
+      const handlePlanetClick = (targetPlanet) => {
+        if (isProcessingMove || targetPlanet.id === playerLocation) return;
+        if (!targetPlanet.isEarth && visitedPlanets.includes(targetPlanet.id)) return;
+
+        setIsProcessingMove(true);
+        sounds.playMove();
+
+        // 1. Move cost 1 oxygen
+        const newOxygen = oxygen - 1;
+        triggerDeltaAnimation(-1);
+
+        if (newOxygen <= 0) {
+          setOxygen(0);
+          sounds.playDefeat();
+          onGameOver(exploredCount, '在航向星球途中氧氣完全耗盡，無法繼續航行。');
+          setIsProcessingMove(false);
+          return;
+        }
+
+        setOxygen(newOxygen);
+        setPlayerLocation(targetPlanet.id);
+
+        // Returning to Earth check
+        if (targetPlanet.isEarth) {
+          if (isMissionGoalAchieved) {
+            setAstronautExpression('happy');
+            setLatestEventMessage('太棒了！你帶著珍貴的探索成果平安降落地球母星！');
+            setTimeout(() => {
+              onVictory(newOxygen, exploredCount);
+            }, 600);
+          } else {
+            setAstronautExpression('normal');
+            setLatestEventMessage('回到地球補給站！目前的任務目標尚未完成，請繼續探索外星！');
+            setIsProcessingMove(false);
+          }
+          return;
+        }
+
+        // Alien Planet Visit
+        const newVisited = [...visitedPlanets, targetPlanet.id];
+        setVisitedPlanets(newVisited);
+        setPlanets((prev) => prev.map((p) => (p.id === targetPlanet.id ? { ...p, visited: true } : p)));
+
+        // Event Trigger
+        setTimeout(() => {
+          resolvePlanetEvent(targetPlanet, newOxygen, newVisited);
+        }, 350);
+      };
+
+      const resolvePlanetEvent = (targetPlanet, currentOx, updatedVisited) => {
+        let nextOxygen = currentOx;
+        let expression = 'normal';
+        let eventSummary = '';
+
+        switch (targetPlanet.event) {
+          case 'none':
+            expression = 'normal';
+            eventSummary = `抵達星球 ${targetPlanet.name}：這是一顆寂靜的荒涼死星，四處空無一物，無事發生。`;
+            sounds.playClick();
+            break;
+
+          case 'oxygen': {
+            const gain = targetPlanet.oxygenBonus || 2;
+            nextOxygen = currentOx + gain;
+            triggerDeltaAnimation(gain);
+            expression = 'happy';
+            eventSummary = `抵達星球 ${targetPlanet.name}：幸運發現了外星能量水晶與高濃度氧氣泉！獲得 +${gain} 個氧氣罐！`;
+            sounds.playOxygenGain();
+            break;
+          }
+
+          case 'volcano':
+            nextOxygen = currentOx - 2;
+            triggerDeltaAnimation(-2);
+            expression = 'shocked';
+            eventSummary = `危險！星球 ${targetPlanet.name} 突然發生劇烈火山噴發！高溫岩漿損壞了裝備，損失 -2 個氧氣罐！`;
+            sounds.playDanger();
+            break;
+
+          case 'plant':
+            setPlantDNA(true);
+            expression = 'happy';
+            eventSummary = `重大發現！在星球 ${targetPlanet.name} 採集到了極度珍貴的「外星植物生命 DNA 樣本」！`;
+            sounds.playSuccessDNA();
+            break;
+
+          case 'cute_animal':
+            setAnimalDNA(true);
+            expression = 'happy';
+            eventSummary = `遇見驚喜！星球 ${targetPlanet.name} 住著溫馴可愛的外星生物，順利取得「外星動物生命 DNA 樣本」！`;
+            sounds.playSuccessDNA();
+            break;
+
+          case 'wild_animal':
+            nextOxygen = currentOx - 1;
+            triggerDeltaAnimation(-1);
+            setAnimalDNA(true);
+            expression = 'shocked';
+            eventSummary = `遇險！在星球 ${targetPlanet.name} 遭到兇暴外星猛獸襲擊！雖然採集到動物 DNA，但緊急撤離時消耗了 -1 個氧氣罐！`;
+            sounds.playDanger();
+            break;
+
+          case 'gravity_repel': {
+            nextOxygen = currentOx - 1;
+            triggerDeltaAnimation(-1);
+            expression = 'shocked';
+            sounds.playDanger();
+            const nearestPlanet = findNearestUnvisitedAlienPlanet(targetPlanet.id, planets, updatedVisited);
+            eventSummary = `引力異常！星球 ${targetPlanet.name} 產生強烈反重力排斥，太空船失控被彈飛至鄰近星球 ${nearestPlanet ? nearestPlanet.name : '未知星域'}，額外消耗 -1 個氧氣罐！`;
+
+            if (nearestPlanet) {
+              setPlayerLocation(nearestPlanet.id);
+              if (!nearestPlanet.isEarth) {
+                updatedVisited = [...updatedVisited, nearestPlanet.id];
+                setVisitedPlanets(updatedVisited);
+                setPlanets((prev) => prev.map((p) => (p.id === nearestPlanet.id ? { ...p, visited: true } : p)));
+              }
+            }
+            break;
+          }
+        }
+
+        setOxygen(nextOxygen);
+        setAstronautExpression(expression);
+        setLatestEventMessage(eventSummary);
+        setEventLogs((prev) => [
+          {
+            id: Date.now(),
+            planetName: targetPlanet.name,
+            eventType: targetPlanet.event,
+            message: eventSummary,
+          },
+          ...prev.slice(0, 5),
+        ]);
+
+        if (nextOxygen <= 0) {
+          sounds.playDefeat();
+          setTimeout(() => {
+            onGameOver(updatedVisited.length, '在探索星球時氧氣耗盡，無法安全返回地球。');
+          }, 600);
+        } else {
+          setIsProcessingMove(false);
+        }
+      };
+
+      const getMissionTitle = () => {
+        switch (mission) {
+          case 'plant': return '取得植物 DNA 樣本並回地球';
+          case 'animal': return '取得動物 DNA 樣本並回地球';
+          case 'explore10': return '探索 10 顆星球並回地球';
+        }
+      };
+
+      return (
+        <div id="main-game-screen" className="relative min-h-screen w-full flex flex-col justify-between bg-slate-950 text-white overflow-hidden">
+          {/* HEADER */}
+          <header className="w-full bg-slate-900/90 border-b border-slate-800 px-3 sm:px-6 py-2.5 z-20 flex flex-wrap items-center justify-between gap-2 shadow-md">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center">
+                <Icon name="globe2" className="w-4 h-4 text-cyan-400" />
+              </div>
+              <h1 className="text-sm sm:text-base font-black text-white tracking-wide">星球大探索</h1>
+            </div>
+
+            <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-2xl bg-slate-800/90 border border-slate-700">
+              <span className="text-xs font-semibold text-slate-400">任務:</span>
+              <span className="text-xs sm:text-sm font-black text-slate-100">{getMissionTitle()}</span>
+              {isMissionGoalAchieved ? (
+                <span className="text-xs bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/40 animate-pulse font-black">
+                  達成！請回地球
+                </span>
+              ) : (
+                <span className="text-xs text-amber-300 font-bold">進行中</span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onToggleAudio}
+                className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                title={audioEnabled ? '關閉音效' : '開啟音效'}
+              >
+                <Icon name={audioEnabled ? 'volume2' : 'volumeX'} className="w-4 h-4 text-cyan-400" />
+              </button>
+              <button
+                onClick={() => { sounds.playClick(); onRestartGame(); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-xs font-semibold text-slate-300 border border-slate-700 cursor-pointer"
+              >
+                <Icon name="rotateCcw" className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">重新開始</span>
+              </button>
+            </div>
+          </header>
+
+          {/* SECONDARY INFO STRIP */}
+          <div className="w-full bg-slate-900/60 border-b border-slate-800 px-4 py-1.5 z-10 flex flex-wrap items-center justify-between text-xs text-slate-300 gap-2">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <Icon name="mapPin" className="w-3.5 h-3.5 text-cyan-400" />
+                <span>已探索外星: <strong className="text-cyan-300">{exploredCount}</strong> / 17</span>
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <Icon name="leaf" className="w-3.5 h-3.5 text-emerald-400" />
+                <span>植物 DNA: {plantDNA ? <strong className="text-emerald-400">已取得</strong> : '未尋獲'}</span>
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <Icon name="paw" className="w-3.5 h-3.5 text-amber-400" />
+                <span>動物 DNA: {animalDNA ? <strong className="text-amber-400">已取得</strong> : '未尋獲'}</span>
+              </span>
+            </div>
+
+            <div className="sm:hidden flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
+              <button
+                onClick={() => setMobileTab('map')}
+                className={`px-2 py-0.5 rounded text-[11px] font-bold ${mobileTab === 'map' ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}
+              >
+                宇宙星圖
+              </button>
+              <button
+                onClick={() => setMobileTab('list')}
+                className={`px-2 py-0.5 rounded text-[11px] font-bold ${mobileTab === 'list' ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}
+              >
+                星球清單 ({planets.length})
+              </button>
+            </div>
+          </div>
+
+          {/* STAR MAP AREA */}
+          <main className="relative flex-1 w-full max-w-6xl mx-auto flex flex-col items-center justify-center p-2 sm:p-4 z-10 overflow-hidden min-h-[480px]">
+            <div
+              id="star-map-container"
+              className={`relative w-full h-[480px] sm:h-[550px] md:h-[600px] rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950/80 shadow-2xl overflow-hidden transition-all ${
+                mobileTab === 'map' ? 'block' : 'hidden sm:block'
+              }`}
+            >
+              {/* Twinkling Stars */}
+              <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                {TWINKLING_STARS.map((s) => (
+                  <div
+                    key={s.id}
+                    className="absolute rounded-full"
+                    style={{
+                      left: `${s.x}%`,
+                      top: `${s.y}%`,
+                      width: `${s.size}px`,
+                      height: `${s.size}px`,
+                      backgroundColor: s.color,
+                      animation: `twinklePulse ${s.dur}s ease-in-out infinite ${s.delay}s`,
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* 18 Planets */}
+              {planets.map((p) => {
+                const isCurrent = p.id === playerLocation;
+                const canClick = !isCurrent && (p.isEarth || !visitedPlanets.includes(p.id));
+                return (
+                  <PlanetGraphic
+                    key={p.id}
+                    planet={p}
+                    isCurrent={isCurrent}
+                    canClick={canClick && !isProcessingMove}
+                    onClick={() => handlePlanetClick(p)}
+                  />
+                );
+              })}
+
+              {/* Astronaut Marker */}
+              <div
+                id="astronaut-marker"
+                className="absolute z-20 pointer-events-none -translate-x-1/2 -translate-y-1/2 transition-all duration-500 ease-out"
+                style={{
+                  left: `${currentPlanet.x}%`,
+                  top: `${currentPlanet.y - (currentPlanet.isEarth ? 9.5 : 8)}%`,
+                }}
+              >
+                <div className="flex flex-col items-center">
+                  <CuteAstronaut expression={astronautExpression} size="sm" floating={!isProcessingMove} />
+                  <span className="text-xs font-black text-cyan-300 bg-slate-900/95 px-2 py-0.5 rounded-full border border-cyan-400 shadow-md -mt-1">
+                    太空人
+                  </span>
+                </div>
+              </div>
+
+              {/* Floating Oxygen Gauge in Map */}
+              <div className="absolute bottom-3 right-3 z-30 pointer-events-auto">
+                <OxygenGauge oxygen={oxygen} deltaAnimation={oxygenDeltaAnim} />
+              </div>
+
+              <div className="absolute top-3 left-3 z-20 hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/80 border border-slate-700/80 text-[11px] text-slate-300">
+                <Icon name="sparkles" className="w-3.5 h-3.5 text-yellow-300" />
+                <span>點擊光暈閃爍星球即可出發</span>
+              </div>
+            </div>
+
+            {/* Mobile List View */}
+            <div
+              id="mobile-planet-roster"
+              className={`w-full max-h-[460px] overflow-y-auto p-2 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-2 sm:hidden ${
+                mobileTab === 'list' ? 'block' : 'hidden'
+              }`}
+            >
+              <div className="p-2 mb-2 bg-slate-800/80 rounded-xl text-xs text-slate-300 flex items-center justify-between">
+                <span>手機專屬星球清單</span>
+                <OxygenGauge oxygen={oxygen} deltaAnimation={oxygenDeltaAnim} />
+              </div>
+              {planets.map((p) => {
+                const isCurrent = p.id === playerLocation;
+                const canClick = !isCurrent && (p.isEarth || !visitedPlanets.includes(p.id));
+                return (
+                  <button
+                    key={`list-${p.id}`}
+                    onClick={() => {
+                      if (canClick && !isProcessingMove) {
+                        handlePlanetClick(p);
+                        setMobileTab('map');
+                      }
+                    }}
+                    disabled={!canClick || isProcessingMove}
+                    className={`w-full flex items-center justify-between p-3.5 rounded-xl border text-left transition-all ${
+                      isCurrent
+                        ? 'bg-yellow-950/50 border-yellow-500/80 text-yellow-200 font-bold'
+                        : canClick
+                        ? p.isEarth
+                          ? 'bg-blue-950/60 border-blue-400 text-white cursor-pointer'
+                          : 'bg-slate-800/90 border-slate-700 text-slate-200 cursor-pointer'
+                        : 'bg-slate-950/40 border-slate-800/40 text-slate-500 cursor-not-allowed opacity-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center font-bold text-xs" style={{ backgroundColor: p.isEarth ? '#0284c7' : p.themeColor }}>
+                        {p.isEarth ? '🌍' : '🪐'}
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm">{p.name} {p.isEarth && '(地球母星)'}</div>
+                        <div className="text-xs text-slate-400">
+                          {isCurrent ? '目前所在位置' : p.visited && !p.isEarth ? '已完成調查' : '尚未登陸'}
+                        </div>
+                      </div>
+                    </div>
+                    {canClick && <span className="text-xs font-bold text-yellow-300">出發 →</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </main>
+
+          {/* BOTTOM EVENT LOG & NOTIFICATION PANEL ("說明欄位") */}
+          <footer className="w-full bg-slate-900/95 border-t border-slate-800 backdrop-blur-md p-3 sm:p-4 z-20">
+            <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-3 sm:gap-4">
+              <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-start">
+                <div className="relative flex-shrink-0 bg-slate-800 rounded-2xl p-1 border border-slate-700">
+                  <CuteAstronaut expression={astronautExpression} size="sm" floating={true} />
+                </div>
+                <div className="md:hidden flex flex-col">
+                  <span className="text-xs font-black text-cyan-400">太空人通訊</span>
+                  <span className="text-xs text-slate-400">所在：{currentPlanet.name}</span>
+                </div>
+              </div>
+
+              <div className="flex-1 w-full bg-slate-950/70 border border-slate-800 rounded-2xl p-3 sm:p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-black text-cyan-400 tracking-wider">即時探測報告與說明欄位</span>
+                  <span className="text-xs text-slate-400 font-mono">目前位置: {currentPlanet.name}</span>
+                </div>
+                <p className="text-sm sm:text-lg font-bold text-slate-100 leading-relaxed">
+                  {latestEventMessage}
+                </p>
+                {eventLogs.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-slate-800/80 flex items-center gap-2 overflow-x-auto text-[11px] text-slate-400">
+                    <span className="font-bold flex-shrink-0">近期紀錄:</span>
+                    {eventLogs.map((log) => (
+                      <span key={log.id} className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 whitespace-nowrap">
+                        {log.planetName}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {isMissionGoalAchieved && playerLocation !== 'earth' && (
+                <button
+                  onClick={() => {
+                    const earthPlanet = planets.find((p) => p.isEarth);
+                    if (earthPlanet) handlePlanetClick(earthPlanet);
+                  }}
+                  className="w-full md:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-sm sm:text-base border border-emerald-300 shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 flex-shrink-0 cursor-pointer animate-pulse"
+                >
+                  <Icon name="checkCircle2" className="w-5 h-5" />
+                  <span>立即返航地球</span>
+                </button>
+              )}
+            </div>
+          </footer>
+        </div>
+      );
+    };
+
+    // ==========================================
+    // 10. VICTORY MODAL COMPONENT
+    // ==========================================
+    const VictoryModal = ({ mission, oxygenRemaining, exploredCount, onRestart }) => {
+      useEffect(() => {
+        sounds.playVictory();
+        if (window.confetti) {
+          try {
+            window.confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+            setTimeout(() => {
+              window.confetti({ particleCount: 60, angle: 60, spread: 55, origin: { x: 0 } });
+              window.confetti({ particleCount: 60, angle: 120, spread: 55, origin: { x: 1 } });
+            }, 350);
+          } catch (e) {}
+        }
+      }, []);
+
+      const getMissionCompletionText = () => {
+        switch (mission) {
+          case 'plant': return '你成功取得了外星植物生命 DNA 樣本！';
+          case 'animal': return '你成功取得了外星動物生命 DNA 樣本！';
+          case 'explore10': return '你成功探索了十個星球！';
+        }
+      };
+
+      return (
+        <div id="victory-screen" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+          <div className="anim-modal relative w-full max-w-lg bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 border-2 border-yellow-400/80 rounded-3xl p-6 sm:p-8 shadow-[0_0_50px_rgba(250,204,21,0.35)] text-center flex flex-col items-center">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-yellow-400/20 border border-yellow-400/60 text-yellow-300 text-sm font-black tracking-wider uppercase mb-3">
+              <Icon name="trophy" className="w-4 h-4 text-yellow-400" />
+              <span>恭喜過關！</span>
+            </div>
+
+            <h2 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-400 mb-2">
+              任務成功！
+            </h2>
+
+            <div className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-200 font-black text-base sm:text-lg my-2 shadow-inner">
+              <Icon name="checkCircle2" className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+              <span>{getMissionCompletionText()}</span>
+            </div>
+
+            <p className="text-sm sm:text-base text-cyan-200 font-semibold mb-3">
+              你成功在有限的氧氣下完成任務，並活著返回地球母星！
+            </p>
+
+            <div className="my-4 relative flex items-center justify-center">
+              <CuteAstronaut expression="happy" size="xl" floating={true} />
+            </div>
+
+            <div className="w-full grid grid-cols-2 gap-3 mb-5 text-left">
+              <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span className="text-xs text-slate-400">剩餘氧氣罐</span>
+                <div className="text-lg font-mono font-black text-cyan-300">{oxygenRemaining} 罐</div>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span className="text-xs text-slate-400">成功登陸星球</span>
+                <div className="text-lg font-mono font-black text-yellow-300">{exploredCount} 顆</div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => { sounds.playClick(); onRestart(); }}
+              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 text-slate-950 font-black text-lg shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-yellow-200"
+            >
+              <Icon name="rotateCcw" className="w-5 h-5 text-slate-950" />
+              <span>再玩一次</span>
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    // ==========================================
+    // 11. GAME OVER MODAL COMPONENT
+    // ==========================================
+    const GameOverModal = ({ exploredCount, reason, onRestart }) => {
+      useEffect(() => {
+        sounds.playDefeat();
+      }, []);
+
+      return (
+        <div id="game-over-screen" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+          <div className="anim-modal relative w-full max-w-lg bg-gradient-to-b from-slate-900 via-rose-950/40 to-slate-900 border-2 border-rose-500/60 rounded-3xl p-6 sm:p-8 shadow-[0_0_50px_rgba(244,63,94,0.25)] text-center flex flex-col items-center">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-rose-950/80 border border-rose-500/50 text-rose-300 text-sm font-black tracking-wider uppercase mb-3">
+              <Icon name="skull" className="w-4 h-4 text-rose-400" />
+              <span>任務失敗</span>
+            </div>
+
+            <h2 className="text-2xl sm:text-4xl font-black text-rose-200 mb-2">
+              氧氣耗盡，太空探險結束了……
+            </h2>
+
+            {reason && (
+              <p className="text-sm sm:text-base text-rose-300/90 font-medium mb-3 px-2">
+                {reason}
+              </p>
+            )}
+
+            <div className="my-6 relative flex items-center justify-center">
+              <CuteAstronaut expression="dizzy" size="xl" floating={true} />
+            </div>
+
+            <p className="text-sm sm:text-base font-semibold text-slate-200 mb-5 leading-relaxed">
+              太空人的氧氣罐用光了，在太空中無力地緩緩漂浮。
+              <br />
+              別灰心！吸取這次探索經驗，整裝出發再試一次吧！
+            </p>
+
+            <div className="w-full p-3 rounded-xl bg-slate-800/80 border border-slate-700 mb-5 flex justify-between items-center text-left">
+              <span className="text-xs sm:text-sm text-slate-400">本次探險星球數</span>
+              <span className="text-base sm:text-lg font-mono font-bold text-slate-200">{exploredCount} 顆</span>
+            </div>
+
+            <button
+              onClick={() => { sounds.playClick(); onRestart(); }}
+              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 text-white font-black text-lg shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-cyan-300"
+            >
+              <Icon name="rotateCcw" className="w-5 h-5" />
+              <span>重新開始</span>
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    // ==========================================
+    // 12. ROOT APPLICATION
+    // ==========================================
+    function App() {
+      const [phase, setPhase] = useState('start');
+      const [selectedMission, setSelectedMission] = useState(null);
+      const [audioEnabled, setAudioEnabled] = useState(true);
+      const [finalOxygen, setFinalOxygen] = useState(0);
+      const [finalExploredCount, setFinalExploredCount] = useState(0);
+      const [gameOverReason, setGameOverReason] = useState('');
+
+      const toggleAudio = () => {
+        sounds.enabled = !audioEnabled;
+        setAudioEnabled(!audioEnabled);
+      };
+
+      const handleStartGame = () => {
+        setPhase('mission_select');
+      };
+
+      const handleSelectMission = (mission) => {
+        setSelectedMission(mission);
+        setPhase('playing');
+      };
+
+      const handleVictory = (oxygenRemaining, exploredCount) => {
+        setFinalOxygen(oxygenRemaining);
+        setFinalExploredCount(exploredCount);
+        setPhase('victory');
+      };
+
+      const handleGameOver = (exploredCount, reason) => {
+        setFinalExploredCount(exploredCount);
+        setGameOverReason(reason);
+        setPhase('game_over');
+      };
+
+      const handleRestart = () => {
+        setSelectedMission(null);
+        setFinalOxygen(0);
+        setFinalExploredCount(0);
+        setGameOverReason('');
+        setPhase('start');
+      };
+
+      return (
+        <div className="min-h-screen w-full bg-slate-950 text-slate-100 font-sans select-none antialiased">
+          {phase === 'start' && (
+            <StartScreen onStart={handleStartGame} audioEnabled={audioEnabled} onToggleAudio={toggleAudio} />
+          )}
+
+          {phase === 'mission_select' && (
+            <MissionSelectScreen
+              onSelectMission={handleSelectMission}
+              audioEnabled={audioEnabled}
+              onToggleAudio={toggleAudio}
+              onBack={() => setPhase('start')}
+            />
+          )}
+
+          {(phase === 'playing' || phase === 'victory' || phase === 'game_over') && selectedMission && (
+            <MainGameScreen
+              key={selectedMission + (phase === 'start' ? 'reset' : '')}
+              mission={selectedMission}
+              audioEnabled={audioEnabled}
+              onToggleAudio={toggleAudio}
+              onRestartGame={handleRestart}
+              onVictory={handleVictory}
+              onGameOver={handleGameOver}
+            />
+          )}
+
+          {phase === 'victory' && selectedMission && (
+            <VictoryModal
+              mission={selectedMission}
+              oxygenRemaining={finalOxygen}
+              exploredCount={finalExploredCount}
+              onRestart={handleRestart}
+            />
+          )}
+
+          {phase === 'game_over' && (
+            <GameOverModal
+              exploredCount={finalExploredCount}
+              reason={gameOverReason}
+              onRestart={handleRestart}
+            />
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

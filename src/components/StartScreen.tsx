@@ -1,6 +1,6 @@
 import React from 'react';
 import { CuteAstronaut } from './CuteAstronaut';
-import { Sparkles, Compass, Rocket, Volume2, VolumeX } from 'lucide-react';
+import { Sparkles, Compass, Rocket, Volume2, VolumeX, Download } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
 interface StartScreenProps {
@@ -30,8 +30,19 @@ export const StartScreen: React.FC<StartScreenProps> = ({
         <div className="absolute bottom-1/3 right-1/4 w-80 h-80 rounded-full bg-purple-600/20 blur-3xl animate-pulse delay-1000" />
       </div>
 
-      {/* Top Bar with Audio Control */}
-      <header className="w-full max-w-4xl flex justify-end items-center z-20">
+      {/* Top Bar with Audio Control & Standalone HTML download */}
+      <header className="w-full max-w-4xl flex justify-between items-center z-20">
+        <a
+          id="btn-download-standalone-html"
+          href="/standalone.html"
+          download="星球大探索_完整單一網頁版.html"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-xs sm:text-sm text-cyan-300 transition-all cursor-pointer shadow-md hover:border-cyan-400"
+          title="下載完全獨立、不需伺服器即可直接運行的 HTML 檔案"
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>下載單一HTML檔</span>
+        </a>
+
         <button
           id="btn-toggle-sound-start"
           onClick={onToggleAudio}
